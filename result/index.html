@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+	<meta charset="UTF-8">
+
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin=""/>
+
+	<title>Interactive map</title>
+
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+		}
+		#map {
+			min-height: 100vh;
+		}
+		
+		.trash {
+			width: 100%;
+		}
+
+
+		.flex-row {
+			display: flex;
+			flex-direction: row;
+			justify-content: space-between;
+		}
+
+		.claim-popup {
+			display: flex;
+			flex-direction: column;
+			width: 240px;
+		}
+
+		.claim-id {
+			text-align: right;
+			height: 0px;
+			color: gray;
+		}
+		.claim-title {
+			font-size: 16px;
+			font-weight: bold;
+		}
+		.claim-descr {
+
+		}
+		.claim-date {
+			display: flex;
+			justify-content: flex-end;
+		}
+		.claim-btn-set-decied {
+			
+		}
+
+		.region-tooltip {
+			display: flex;
+			flex-direction: column;
+		}
+		.tooltip-id {
+			text-align: right;
+			color: gray;
+		}
+
+	</style>
+
+	<script type="text/javascript">
+		
+		// предполагается, что конструктор класса будет использован при выгрузке данных о <заявках> из БД
+
+		function Claim(id, date, is_decied, decied_date, descr, lat, lon, author, source, added_manually, photo) {
+
+			return {
+				"id": id, 
+				"date": date, 
+				"is_decied": is_decied, 
+				"decied_date": decied_date, 
+				"descr": descr, 
+				"lat": lat, 
+				"lon": lon, 
+				"author": author, 
+				"source": source, 
+				"added_manually": added_manually,
+				"photo": photo
+			}
+		}
+
+		function Region(id, claims, decied_claims) {
+			return {
+				"id": id, 
+				"claims": claims,
+				"decied_claims": decied_claims
+			}
+		}
+
+		Date.prototype.yyyymmdd = function() {
+		  let mm = this.getMonth() + 1; // getMonth() is zero-based
+		  let dd = this.getDate();
+
+		  return [(mm>9 ? '' : '0') + mm,
+	          (dd>9 ? '' : '0') + dd, this.getFullYear()
+	         ].join('.');
+		};
+
+
+	</script>
+	<script type="text/javascript" src="js/db.js"></script>
+	
+</head>
+<body>
+
+	<div id="map"></div>
+
+	<script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script>
+
+	<script type="text/javascript">
+
+		// создаю объект карты
+		let map = L.map('map').setView([55.01099665830592, 73.31296920776367], 13);
+
+		// создаю иконки
+		let greenIcon = L.icon({
+			iconUrl: "src/markers/green.png",
+			iconSize: [64, 64],
+			iconAnchor: [32, 64],
+			popupAnchor: [0, -50]
+		});
+		let redIcon = L.icon({
+			iconUrl: "src/markers/red.png",
+			iconSize: [64, 64],
+			iconAnchor: [32, 64],
+			popupAnchor: [0, -50]
+		});
+
+
+		// настройка основного слоя карты
+		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
+
+
+		// служит для формирования наименования и описания заголовка всплывающей подсказки 
+		function getClaimTitleAndDescrString(descr) {
+
+			let maxDescrLen = 26;
+
+			if (descr.length > maxDescrLen) {
+				return '<p><span class="claim-title">' + descr.slice(0, 26) + '</span><span class="claim-descr">' + descr.slice(26) + '</span></p>';
+			} else {
+				return '<p><span class="claim-title">' + descr + '</span></p>';
+			}
+
+		}
+
+		function getClaimDateStr(date, is_decied, decied_date = undefined) {
+			if (is_decied) {
+				return '<span class="claim-date">' + date.yyyymmdd() + ' - ' + decied_date.yyyymmdd() + '<span>';
+			} else {	
+				return '<span class="claim-date">' + date.yyyymmdd() + ' - **.**.****<span>';
+			}
+		}
+
+		function getClaimImgStr(imgName) {
+			return '<img class="trash" src="src/claimImages/' + imgName + '">';
+		}
+
+
+		// загружаю метки
+		dataset.forEach(claim => {
+			L.marker([claim.lat, claim.lon], {
+				icon: claim.is_decied? greenIcon: redIcon
+			// добавляю всплывающие подсказки
+			}).bindPopup(function (layer) {
+		   		return '<div class="claim-popup">' +
+		   			'<div class="claim-id">#' + claim.id + '</div>' +
+		   			getClaimTitleAndDescrString(claim.descr) +
+		   			'<div class="flex-row"' +
+		   				'<span class="claim-author">' + claim.author + '</span>' + 
+		   				getClaimDateStr(claim.date, claim.is_decied, claim.decied_date) + '</br>' +
+		   			'</div>' + '</br>' +
+		   			getClaimImgStr(claim.photo) + '</div>';
+			}).addTo(map);
+		});
+
+
+		// сокрытие меток
+		let isMarkersVisible = true;
+		document.addEventListener("keydown", e => {
+
+			isMarkersVisible = !isMarkersVisible;
+			map.eachLayer(layer => {
+				if (layer.options.hasOwnProperty("icon")) {
+  					layer.setOpacity(isMarkersVisible ? 1 : 0);
+  				}
+  			});
+		});
+
+
+	</script>
+
+	<script type="text/javascript">
+		
+
+		function getClaimsByRegionRect(rect) {
+
+			let regClaims = [];
+			let regDeciedClaims = []; 
+
+			dataset.forEach(claim => {
+				if (rect[0][0] < claim.lat && claim.lat < rect[1][0]
+				&& rect[0][1] < claim.lon && claim.lon < rect[1][1]) {
+					if (claim.is_decied) {
+						regDeciedClaims.push(claim.id);
+					} else {
+						regClaims.push(claim.id);
+					}
+				}
+			});
+
+			return [regClaims, regDeciedClaims];
+
+		}
+
+
+		function getRegionColor(region) {
+
+
+			if (region.claims.length == 0) {
+				if (region.decied_claims.length == 0) {
+					return "lightgray";
+				} else {
+					return "rgba(50, 255, 100, 0.8)";
+				}
+
+			} else {
+
+				let regionStatusGradeStepsCount = 10;
+
+				return 'rgba(255, 0, 0, ' + (region.claims.length > regionStatusGradeStepsCount ? 1 : 0.2 + 0.8 /regionStatusGradeStepsCount * region.claims.length) + ')';
+			
+			}
+		}
+
+
+		let regions = [];
+
+		let mapRect = document.getElementById("map").getBoundingClientRect();
+
+		let regionMapRect = [[55.08583494070711, 73.15040588378908], [54.86001096585755, 73.59466552734376]];
+		let regionSize = [regionMapRect[0][0]-regionMapRect[1][0], regionMapRect[1][1]-regionMapRect[0][1]];
+
+		let regionCount = [70, 70]
+
+		hStep = regionSize[0]/regionCount[0];
+		vStep = regionSize[1]/regionCount[1];
+		for (i=0; i<regionCount[0]; i++) {
+			for (j=0; j<regionCount[1]; j++) {
+				
+				let regionRect = [[regionMapRect[1][0] + hStep*i, regionMapRect[0][1] + vStep*j], [regionMapRect[1][0] + hStep*(i+1), regionMapRect[0][1] + vStep*(j+1)]];
+				
+				let regionClaims = getClaimsByRegionRect(regionRect);
+				let region = new Region(i+":"+j, regionClaims[0], regionClaims[1]);
+
+				regions.push(region);
+
+				L.rectangle(regionRect,
+					{color: getRegionColor(region), weight: 0.3, fillOpacity: 0.5})
+				.bindTooltip(function (layer) {
+					return '<div class="region-tooltip">' +
+						'<div class="tooltip-id">#' + region.id + '</div><p>' + region.claims.length + "/" + region.decied_claims.length + '</p>'
+						'</div>';
+				}).addTo(map);
+
+			}
+		}
+
+	</script>
+
+</body>
+</html>
